@@ -16,6 +16,7 @@ venv/
 data/raw/
 *.csv
 *.parquet
+!data/processed/daily_demand.parquet
 
 # OS
 .DS_Store
