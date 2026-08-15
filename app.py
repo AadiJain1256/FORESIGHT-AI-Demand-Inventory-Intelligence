@@ -59,9 +59,9 @@ st.success(
 @st.cache_data
 def load_daily_demand():
 
-    return pd.read_csv(
-        "data/processed/daily_demand.csv",
-        usecols=lgb_features + [
+    return pd.read_parquet(
+        "data/processed/daily_demand.parquet",
+       columns=lgb_features + [
             "date",
             "daily_quantity"
         ]
