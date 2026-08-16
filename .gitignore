@@ -14,7 +14,7 @@ venv/
 
 # Large datasets
 data/raw/
-*.csv
+
 *.csv
 !data/processed/store_sku_lookup.csv
 *.parquet
