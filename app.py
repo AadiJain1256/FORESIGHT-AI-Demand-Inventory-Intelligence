@@ -1,8 +1,10 @@
+
 from datetime import date, timedelta
 
 import streamlit as st
 import joblib
 import pandas as pd
+import pyarrow.dataset as ds
 
 
 # =========================================================
@@ -53,22 +55,85 @@ st.success(
 
 
 # =========================================================
-# LOAD DAILY DEMAND DATA
+# LOAD STORE OPTIONS
 # =========================================================
 
 @st.cache_data
-def load_daily_demand():
+def load_store_options():
+
+    dataset = ds.dataset(
+        "data/processed/daily_demand.parquet",
+        format="parquet"
+    )
+
+    store_values = set()
+
+    scanner = dataset.scanner(
+        columns=["store_id"],
+        batch_size=100_000
+    )
+
+    for batch in scanner.to_batches():
+
+        store_values.update(
+            batch.column("store_id").to_pylist()
+        )
+
+    return sorted(store_values)
+
+
+# =========================================================
+# LOAD SKU OPTIONS FOR SELECTED STORE
+# =========================================================
+
+@st.cache_data
+def load_sku_options(selected_store):
+
+    dataset = ds.dataset(
+        "data/processed/daily_demand.parquet",
+        format="parquet"
+    )
+
+    sku_values = set()
+
+    scanner = dataset.scanner(
+        columns=["store_id", "sku_id"],
+        filter=(
+            ds.field("store_id") == selected_store
+        ),
+        batch_size=100_000
+    )
+
+    for batch in scanner.to_batches():
+
+        sku_values.update(
+            batch.column("sku_id").to_pylist()
+        )
+
+    return sorted(sku_values)
+
+
+# =========================================================
+# LOAD ONLY SELECTED STORE + SKU DATA
+# =========================================================
+
+@st.cache_data
+def load_forecast_data(
+    selected_store,
+    selected_sku
+):
 
     return pd.read_parquet(
         "data/processed/daily_demand.parquet",
-       columns=lgb_features + [
+        columns=lgb_features + [
             "date",
             "daily_quantity"
+        ],
+        filters=[
+            ("store_id", "==", selected_store),
+            ("sku_id", "==", selected_sku)
         ]
     )
-
-
-daily_demand_app = load_daily_demand()
 
 
 # =========================================================
@@ -433,9 +498,7 @@ st.header("Demand Forecast")
 # STORE SELECTION
 # =========================================================
 
-store_options = sorted(
-    daily_demand_app["store_id"].unique()
-)
+store_options = load_store_options()
 
 selected_store = st.selectbox(
     "Select store",
@@ -447,11 +510,8 @@ selected_store = st.selectbox(
 # SKU SELECTION
 # =========================================================
 
-sku_options = sorted(
-    daily_demand_app.loc[
-        daily_demand_app["store_id"] == selected_store,
-        "sku_id"
-    ].unique()
+sku_options = load_sku_options(
+    selected_store
 )
 
 selected_sku = st.selectbox(
@@ -490,6 +550,20 @@ forecast_days = st.number_input(
 # =========================================================
 
 if st.button("Forecast Demand"):
+
+    # -----------------------------------------------------
+    # Load only the selected Store + SKU history
+    # -----------------------------------------------------
+
+    daily_demand_app = load_forecast_data(
+        selected_store,
+        selected_sku
+    )
+
+
+    # -----------------------------------------------------
+    # Run recursive forecast
+    # -----------------------------------------------------
 
     recursive_results = recursive_forecast(
         daily_demand_app,
@@ -532,5 +606,3 @@ if st.button("Forecast Demand"):
         use_container_width=True,
         hide_index=True
     )
-
-
